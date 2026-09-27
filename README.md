@@ -1,5 +1,8 @@
 ![om1_banner_w](https://github.com/user-attachments/assets/86590615-018d-4443-b345-8d224227e83f)
 
+> [!IMPORTANT]
+> **Study fork:** If you're reading this repository to learn how OM1 works, start with **[STUDY_START_HERE.md](STUDY_START_HERE.md)**. It includes a Python-to-Go starter pack, architecture/file map, runtime data-flow diagrams, FDE-oriented debugging boundaries, and heavily annotated walkthroughs of the entry point and cortex loop.
+
 <p align="center">
 <a href="https://arxiv.org/abs/2412.18588">Technical Paper</a> |
 <a href="https://docs.openmind.com/">Documentation</a> |
