@@ -1,420 +1,342 @@
-# Go Through OM1 — Deep Course for a Python Developer
+# Go Through OM1 — Complete Deep Course for a Python Developer
 
-This course is designed for a Python-fluent engineer who wants to become comfortable enough with Go to **read, explain, debug, and make small changes in OM1**.
+This is the **full offline Go course** for this OM1 study fork.
 
-It is deliberately not a generic "learn Go in 20 minutes" guide. The goal is to make the syntax and design patterns feel unsurprising by repeatedly connecting them to:
+It is designed for a Python-fluent engineer who wants to become comfortable enough with Go to:
 
-1. Python concepts you already know.
-2. Concrete OM1 files.
-3. The runtime behavior of a robot/agent system.
-4. Interview-style explanations.
+- read real OM1 source
+- explain unfamiliar Go code
+- understand OM1 architecture
+- reason about goroutines/channels/context/mutexes
+- trace model ToolCalls into real robot actions
+- make small targeted changes
+- debug field integrations
+- speak credibly about Go in an FDE interview
 
-The course is intended to work **offline** after you pull the repository.
+The goal is practical fluency, not language-lawyer mastery.
 
----
-
-## What "done" should feel like
-
-After roughly five focused hours, you should be able to open a typical OM1 Go file and answer questions like:
-
-- What package am I in?
-- What state does this struct hold?
-- Which functions are plain functions and which are methods?
-- Why is this receiver a pointer?
-- What interface does this type satisfy?
-- What is this map or slice storing?
-- What does `:=` create here?
-- Why are there two return values?
-- What does `if err != nil` mean?
-- What is a type assertion?
-- Why is a goroutine being started?
-- What is flowing through this channel?
-- What can cancel this code?
-- Why is there a `select`?
-- What state needs a mutex?
-- What does this JSON-like tool call become?
-- How does an LLM action reach a robot connector?
-- Where would I put a breakpoint/log statement if the system stopped behaving correctly?
-
-You do **not** need to become a language-lawyer or expert Go developer. The target is practical fluency.
+Everything needed for the course is in this repository after you pull it.
 
 ---
 
-# The mental model: learn Go by following one OM1 loop
+# Recommended order
 
-Keep this runtime story in your head during the entire course:
+## Module 1 — Go from scratch through real OM1 code
+**60–90 min**
 
-```text
-config
-  ↓
-cmd/main.go
-  ↓
-runtime.New / Runtime.Run
-  ↓
-input plugins
-  ↓
-input orchestrator
-  ↓
-sensor buffers
-  ↓
-Fuser
-  ↓
-prompt
-  ↓
-Cortex LLM
-  ↓
-structured tool/action calls
-  ↓
-action orchestrator
-  ↓
-connector
-  ↓
-Zenoh / HTTP / TTS / robot interface
-  ↓
-physical or software action
-```
+[01_READING_GO_FROM_SCRATCH_WITH_OM1.md](01_READING_GO_FROM_SCRATCH_WITH_OM1.md)
 
-Go concepts are not learned in isolation. They are learned where they appear in this path.
-
----
-
-# Five-hour course plan
-
-The times are approximate. Do not rush to match them.
-
-## Module 1 — Reading Go from scratch using OM1
-**60–90 minutes**
-
-File:
-
-> `study/go-course/01_READING_GO_FROM_SCRATCH_WITH_OM1.md`
-
-Starts from almost zero Go knowledge.
-
-Topics:
-
-- source files and packages
-- imports
-- `main`
-- variables
-- `var`, `:=`, and `=`
-- primitive types
-- functions and return types
-- multiple returns
-- errors as values
-- `if`
-- `for`
+Covers:
+- packages/imports/main
+- variables and types
+- functions and multiple returns
+- explicit errors
 - structs
-- struct literals
 - pointers
-- methods and receivers
-- slices
-- maps
-- `any`
+- methods/receivers
+- slices and maps
 - interfaces
+- factories and registries
+- type assertions
+- nil
+- defer
+- exports
+- reading internal/inputs/sensor.go
+
+Then do:
+
+[EXERCISES_01.md](EXERCISES_01.md)
+
+This includes 25 exercises and a full answer key.
+
+---
+
+## Module 2 — Structs, interfaces, pointers, and composition
+**45–60 min**
+
+[02_STRUCTS_INTERFACES_AND_COMPOSITION.md](02_STRUCTS_INTERFACES_AND_COMPOSITION.md)
+
+Covers:
+- Go object model versus Python classes
+- pointer versus value receivers
 - implicit interface satisfaction
-- function types
-- registries
-- type assertions
-- `nil`
-- exported versus unexported names
-- `defer`
-- a first complete reading of `internal/inputs/sensor.go`
-
-This module deliberately repeats important ideas several times.
-
-Exercise companion:
-
-> `study/go-course/EXERCISES_01.md`
-
----
-
-## Module 2 — Go's object model: structs, methods, pointers, interfaces, composition
-**45–60 minutes**
-
-Planned OM1 anchors:
-
-- `internal/inputs/sensor.go`
-- `internal/actions/action.go`
-- `internal/fuser/fuser.go`
-
-Topics to build deeply:
-
-- why Go does not have Python-style classes
-- data versus behavior
-- receiver methods
-- pointer receiver versus value receiver
-- interfaces as behavioral contracts
-- structural/implicit interface satisfaction
-- dependency injection
-- composition instead of inheritance
 - interface values
-- typed nil versus nil
-- constructors as convention
-- why OM1's plugin architecture fits Go especially well
+- optional capability interfaces
+- dependency injection
+- composition
+- typed nil
+- action Connector architecture
+- why OM1's plugin design fits Go
 
-Goal:
-
-> Look at an OM1 interface and immediately understand what a plugin has promised to implement.
+Primary OM1 anchors:
+- internal/inputs/sensor.go
+- internal/actions/action.go
+- internal/fuser/fuser.go
+- plugins/actions/unitree/go2/autonomy/move.go
 
 ---
 
-## Module 3 — Data plumbing: slices, maps, JSON-shaped values, schemas, and errors
-**40–50 minutes**
+## Module 3 — Data, errors, JSON-shaped values, and ToolCalls
+**40–50 min**
 
-Planned OM1 anchors:
+[03_DATA_ERRORS_AND_TOOL_CALLS.md](03_DATA_ERRORS_AND_TOOL_CALLS.md)
 
-- `internal/actions/orchestrator.go`
-- `internal/actions/schema.go`
-- config loading code
-- LLM tool-call structures
-
-Topics:
-
-- arrays versus slices
-- `make`
-- `append`
-- map lookup with `value, ok`
-- `map[string]any`
-- nested dynamic data
+Covers:
+- slices and capacity
+- maps
+- map comma-ok
+- any
 - type assertions
-- JSON decoding mental model
+- named scalar types
+- struct tags
+- ToolCall and Response
+- schema-driven actions
 - error values
-- wrapping errors
-- sentinel versus typed errors
-- zero values
+- error wrapping
+- nil map versus nil slice
+- serialization boundaries
 - defensive parsing
-- what a structured LLM tool call looks like in Go
+- model output → internal Call → Connector
 
-Goal:
-
-> Be able to follow structured data from an LLM response into an OM1 action.
+Primary OM1 anchors:
+- internal/llm/llm.go
+- internal/actions/action.go
+- internal/actions/orchestrator.go
+- plugins/actions/unitree/go2/autonomy/move.go
 
 ---
 
 ## Module 4 — Concurrency without hand-waving
-**75–90 minutes**
+**75–90 min**
 
-This is the most important "Go-specific" module for OM1.
+[04_CONCURRENCY_WITH_OM1.md](04_CONCURRENCY_WITH_OM1.md)
 
-Planned OM1 anchors:
+This is the most Go-specific part of the course.
 
-- `internal/inputs/orchestrator.go`
-- `internal/actions/orchestrator.go`
-- `internal/runtime/runtime.go`
-
-Topics:
-
-- what a goroutine actually means
+Covers:
 - concurrency versus parallelism
+- goroutines
+- anonymous goroutines
 - channels
-- send and receive syntax
+- signal channels
+- channel direction
 - buffered versus unbuffered channels
-- receive-only and send-only channels
-- `select`
-- `context.Context`
-- cancellation
+- non-blocking send
+- select
+- timers
+- context cancellation
+- context trees/timeouts
+- WaitGroups
+- mutexes
+- atomics
+- races
+- deadlocks
+- goroutine leaks
+- shutdown
+- Cortex event-loop reasoning
+
+Primary OM1 anchors:
+- internal/inputs/orchestrator.go
+- internal/actions/orchestrator.go
+- internal/runtime/runtime.go
+- plugins/actions/unitree/go2/autonomy/move.go
+
+---
+
+## Module 5 — OM1 end to end in Go
+**60 min**
+
+[05_OM1_END_TO_END_IN_GO.md](05_OM1_END_TO_END_IN_GO.md)
+
+Traces:
+
+~~~text
+config
+→ main
+→ Runtime
+→ mode initialization
+→ sensors
+→ input orchestrator
+→ buffers
+→ Fuser
+→ Cortex
+→ ToolCalls
+→ MCP resolution when configured
+→ Action Orchestrator
+→ Connector
+→ Zenoh/service/robot
+~~~
+
+Includes a detailed Go2 movement walkthrough and an FDE debugging map.
+
+This module also corrects several easy oversimplifications:
+- OM1 is not merely "ROS with an LLM on top"
+- not every connector goes through ROS/Zenoh
+- MCP is not automatically the ROS translator
+- Cortex returns structured ToolCalls, not merely prose
+
+---
+
+## Module 6 — Practical Go and FDE interview preparation
+**30–45 min**
+
+[06_PRACTICAL_GO_AND_FDE_INTERVIEW.md](06_PRACTICAL_GO_AND_FDE_INTERVIEW.md)
+
+Covers:
+- six-pass unfamiliar-code reading
+- safe small changes
+- validation
+- observability
 - timeouts
-- `defer`
-- `sync.WaitGroup`
-- `sync.Mutex`
-- race conditions
-- snapshots of shared state
-- clean shutdown
-- why robotics/agent runtimes naturally benefit from concurrency
-
-Goal:
-
-> Read OM1's cortex/input/action loops and explain which pieces are concurrent and how they stop.
-
----
-
-## Module 5 — Read OM1 as a Go program, end to end
-**60 minutes**
-
-Planned reading path:
-
-1. `cmd/main.go`
-2. `internal/runtime/runtime.go`
-3. `internal/inputs/orchestrator.go`
-4. `internal/fuser/fuser.go`
-5. LLM response/tool-call structures
-6. `internal/actions/orchestrator.go`
-7. one real Unitree/Zenoh action connector
-
-Topics:
-
-- process startup
-- config-driven construction
-- registries and plugin initialization
-- runtime modes
-- event loop
-- fusing context
-- model call
-- action parsing
-- connector dispatch
-- middleware boundary
-- where to debug each failure mode
-
-Goal:
-
-> Explain OM1 from code, not just from architecture diagrams.
-
----
-
-## Module 6 — Practical Go for an FDE interview
-**30–45 minutes**
-
-Topics:
-
-- reading unfamiliar Go aloud
-- explaining a function before understanding every line
-- changing a struct safely
-- adding a small function
-- adding an error check
-- logging useful evidence
-- recognizing a concurrency bug
-- making a tiny connector
-- testing
-- `go test`
+- synchronization reasoning
+- race detector
+- tests
 - table-driven tests
-- debugging strategy
-- "I do not know this exact API, but here's how I would reason about it"
-
-Goal:
-
-> Be credible working in Go even if your strongest implementation language remains Python.
-
----
-
-# Recommended study method
-
-For each concept, use this four-step loop:
-
-### 1. Plain English
-Explain what the construct means without code.
-
-### 2. Python translation
-Map it to the closest thing you already know.
-
-### 3. Tiny Go example
-See the construct without OM1 complexity.
-
-### 4. Real OM1 example
-Open the actual file and identify it in context.
-
-If a Go concept still feels mysterious after step 4, do **not** keep reading forward. Re-read the concept using a different example.
+- gofmt / go vet / go test / go build
+- debugging scenarios
+- coding strategy
+- honest answers about current Go proficiency
+- common interview traps
+- OM1-specific verbal questions
 
 ---
 
-# Important rule: syntax versus architecture
+## Final refresh — cheat sheet
+**10–15 min**
 
-There are two different reasons code may feel confusing:
+[07_GO_OM1_CHEAT_SHEET.md](07_GO_OM1_CHEAT_SHEET.md)
 
-**Syntax confusion**
-> "What does `:=` mean?"
-
-**Architecture confusion**
-> "Why does this orchestrator exist?"
-
-Do not mix these.
-
-When reading OM1:
-
-1. First identify the syntax.
-2. Then ask what the line does.
-3. Then ask why OM1 needs it.
-
-This prevents a single unfamiliar line from turning into "I don't understand Go."
+Use this:
+- before the recruiter/technical interview
+- after a break
+- on the plane when you need a fast reactivation
+- before opening a complicated OM1 file
 
 ---
 
-# Your Python advantage
+# Five-hour path
 
-You already know programming concepts.
+If you have one long study block:
 
-You are not learning:
-- what a function is
-- what a condition is
-- what a list is
-- what a dictionary is
-- what an object is
-- what an exception-like failure is
-- what concurrency is conceptually
-- what an API call is
+~~~text
+Hour 0:00–1:15  Module 1
+Hour 1:15–1:35  Module 1 exercises
+Hour 1:35–2:20  Module 2
+Hour 2:20–3:00  Module 3
+Hour 3:00–4:10  Module 4
+Hour 4:10–4:50  Module 5
+Hour 4:50–5:15  Module 6 + cheat sheet
+~~~
 
-You are mostly learning:
+If you are tired, do not force the timing.
 
-> "How does Go represent concepts I already understand?"
-
-That is a much smaller problem.
+Understanding beats completion speed.
 
 ---
 
-# Python → Go translation table
+# The one OM1 mental model to retain
 
-| Python idea | Go idea |
-|---|---|
-| module / package | package |
-| `def` | `func` |
-| class mainly holding data | `struct` |
-| instance method / `self` | method + receiver |
-| Protocol / ABC | `interface` |
-| list | slice |
-| dict | map |
-| `Any` | `any` |
-| exception | usually explicit `error` return |
-| `None` | often `nil` |
-| `with` / `finally` cleanup | often `defer` |
-| thread/task | roughly: goroutine |
-| queue/event | often: channel |
-| asyncio wait-for-one | roughly: `select` |
-| cancellation token | `context.Context` |
-| decorator/registration dict | often registry + `init()` |
-| constructor call | often `NewX(...)` function |
+~~~text
+Inputs
+  ↓
+Sensor buffers
+  ↓
+Fuser
+  ↓
+Prompt
+  ↓
+Cortex LLM
+  ↓
+structured ToolCalls
+  ↓
+Action Orchestrator
+  ↓
+Connector
+  ↓
+Zenoh / HTTP / TTS / robot/service interface
+~~~
 
-These are analogies, not exact equivalences.
+Configuration chooses concrete implementations.
+
+Go interfaces keep the central runtime decoupled from those implementations.
+
+Concurrency lets the runtime manage many long-lived activities simultaneously.
 
 ---
 
-# The files you will repeatedly revisit
+# The learning rule
 
-Keep these open or remember the paths:
+For every new Go idea, use four passes:
 
-```text
+1. **plain English**
+2. **Python analogy**
+3. **tiny Go example**
+4. **real OM1 example**
+
+And keep two kinds of confusion separate:
+
+**Syntax**
+> What does this symbol mean?
+
+**Architecture**
+> Why does this component exist?
+
+Solve syntax first, architecture second.
+
+---
+
+# What "done" means
+
+After the course, you should be able to open a normal OM1 Go file and answer:
+
+- What package is this?
+- What are the important structs/interfaces?
+- Is this a function or method?
+- Why is the receiver a pointer?
+- What data is in this slice/map?
+- What is dynamic versus statically typed?
+- What can fail?
+- Which error path handles it?
+- Is a goroutine being launched?
+- What is this channel signaling?
+- What can cancel this operation?
+- What state is protected by this mutex?
+- What ToolCall/action is being routed?
+- What external side effect happens next?
+- Where would I collect evidence if it broke?
+
+You do not need to understand every library call immediately.
+
+The target is:
+
+> unfamiliar Go code is readable, navigable, and debuggable.
+
+---
+
+# Files worth keeping open while studying
+
+~~~text
 cmd/main.go
 internal/inputs/sensor.go
 internal/inputs/orchestrator.go
 internal/fuser/fuser.go
+internal/llm/llm.go
+internal/llm/orchestrator.go
 internal/actions/action.go
 internal/actions/orchestrator.go
 internal/runtime/runtime.go
-plugins/actions/unitree/go2/autonomy/
-internal/zenoh/
-```
-
-You should expect the same concepts to appear repeatedly.
-
-That repetition is intentional.
+plugins/actions/unitree/go2/autonomy/move.go
+internal/zenoh/session.go
+~~~
 
 ---
 
-# First assignment
+# Start
 
-Start here:
+Go to:
 
-> **[Module 1 — Reading Go from scratch using OM1](01_READING_GO_FROM_SCRATCH_WITH_OM1.md)**
+[Module 1 — Reading Go from Scratch with OM1](01_READING_GO_FROM_SCRATCH_WITH_OM1.md)
 
-Do not begin by trying to read the entire OM1 runtime.
+If you already completed Module 1, continue directly to:
 
-The first goal is simpler:
-
-> Make `internal/inputs/sensor.go` feel readable rather than foreign.
-
-After Module 1, complete:
-
-> **[Module 1 Exercises](EXERCISES_01.md)**
-
-Then try reading `internal/inputs/sensor.go` again without the lesson open.
-
-If you can explain roughly 80% of it aloud, Module 1 worked.
+[Module 2 — Structs, Interfaces, and Composition](02_STRUCTS_INTERFACES_AND_COMPOSITION.md)
