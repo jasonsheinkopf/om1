@@ -81,6 +81,18 @@ If you are lost anywhere in the repository, come back to this graph.
 
 ---
 
+# Deep Go course — use this if you want to actually learn Go
+
+The short Go Starter Pack below is useful as a reference, but there is now a **complete, self-contained Go course** built around this exact OM1 repository:
+
+> **[Go Through OM1 — Complete Deep Course](study/go-course/README.md)**
+
+It is designed for roughly five hours of offline study and goes from Python-to-Go foundations through interfaces, data/tool calls, concurrency, the complete OM1 runtime path, and FDE interview practice.
+
+If Go still feels unfamiliar, do the deep course **before** the original Pass 1 reading order.
+
+---
+
 # Recommended reading order
 
 Do **not** browse alphabetically.
