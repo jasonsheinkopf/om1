@@ -1,5 +1,9 @@
 # Go Starter Pack for a Python Developer Reading OM1
 
+> **Looking for the full course?** This file is now the compact reference. For the detailed offline course with OM1 examples, concurrency, exercises, end-to-end runtime tracing, and interview practice, start at [study/go-course/README.md](go-course/README.md).
+
+---
+
 This is **not** a complete Go course.
 
 It contains the Go concepts you need so OM1 source code stops looking unfamiliar.
