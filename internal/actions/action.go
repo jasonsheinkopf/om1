@@ -1,5 +1,22 @@
 package actions
 
+// ============================================================================
+// STUDY GUIDE — ACTION ABSTRACTION / CONNECTOR CONTRACT
+//
+// This file defines WHAT an OM1 action is, separate from HOW it is executed.
+//
+// AgentAction ties together:
+//   LLM-visible label + schema/metadata + concrete Connector
+//
+// Connector is the integration boundary. A connector can turn high-level intent
+// into TTS, an API/service call, middleware publication, robot behavior, etc.
+//
+// MENTAL MODEL:
+//   ToolCall name/arguments -> AgentAction -> Connector.Connect -> real effect
+//
+// This separation is why OM1 can swap hardware/services without rewriting Cortex.
+// ============================================================================
+
 import "context"
 
 // Input is the typed value parsed from an LLM tool-call argument.
@@ -9,6 +26,8 @@ type Input any
 type Output any
 
 // Connector executes a single action decision on hardware or a remote system.
+// Connector is the concrete side-effect contract. Connect accepts a new action;
+// Tick supports connectors that need recurring progress; Stop releases resources.
 type Connector interface {
 	// Connect is called once per LLM decision with the parsed input.
 	Connect(ctx context.Context, input Input) (Output, error)
@@ -21,6 +40,7 @@ type Connector interface {
 }
 
 // Factory creates a Connector from a decoded config map.
+// AgentAction connects what Cortex knows (label/schema) to what code actually runs (Connector).
 type AgentAction struct {
 	// Name is the unique identifier for this action.
 	Name string
