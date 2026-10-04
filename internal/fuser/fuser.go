@@ -1,5 +1,25 @@
 package fuser
 
+// ============================================================================
+// STUDY GUIDE — FUSER = LLM CONTEXT BUILDER
+//
+// Do NOT read "Fuser" as low-level robotics sensor fusion.
+//
+// INPUT:
+//   []string containing latest formatted sensor observations
+//
+// ALSO CONTRIBUTES:
+//   persona/governance, time, knowledge-base context, memory, available actions,
+//   MCP tool descriptions, examples, and other configured prompt material.
+//
+// OUTPUT:
+//   ONE prompt/context string for Cortex.
+//
+// INTERVIEW VERSION:
+//   "The Fuser assembles the current agent state and capabilities into the
+//    textual context the Cortex LLM reasons over."
+// ============================================================================
+
 import (
 	"context"
 	"strings"
@@ -33,11 +53,15 @@ type MCPDescriber interface {
 }
 
 // NewFuser creates a new Fuser with the given runtime configuration, agent actions, knowledge base, memory manager, MCP describer, and logger.
+// NewFuser constructs the context builder and stores its dependencies.
+// It does NOT fuse observations yet; Fuse below performs that work per Cortex cycle.
 func NewFuser(runtimeConfig *config.RuntimeConfig, agentActions []*actions.AgentAction, knowledgeBase KnowledgeBase, memory memory.MemoryManager, mcp MCPDescriber, log *zap.Logger) *Fuser {
 	return &Fuser{runtimeConfig: runtimeConfig, agentActions: agentActions, knowledgeBase: knowledgeBase, memory: memory, mcp: mcp, log: log}
 }
 
 // Fuse combines the prompt components into a single string to be sent to the LLM.
+// Fuse builds the actual prompt for THIS reasoning cycle from the latest observations
+// plus configured/static/dynamic context sources.
 func (f *Fuser) Fuse(ctx context.Context, sensorBuffers []string) (string, error) {
 	var builder strings.Builder
 
