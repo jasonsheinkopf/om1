@@ -92,12 +92,15 @@ type Runtime struct {
 	ioProvider   *providers.IOProvider
 	tracer       *tracer.Tracer
 
+	// GO: Mutex protects shared Runtime state from concurrent goroutines.
+	// Lock before a shared read/write and unlock after taking/updating the snapshot.
 	mu                        sync.Mutex
 	current                   *modeState
 	isReloading               bool
 	generation                int
 	modeTransitionHandlerOnce bool
 
+	// GO: chan string is a typed channel used to communicate mode names between goroutines.
 	modeTransitionCh chan string
 
 	globalBg globalBackgroundState
@@ -110,6 +113,7 @@ func New(systemConfig *config.SystemConfig, log *zap.Logger, opts Options) *Runt
 		APIKey: systemConfig.APIKey,
 	})
 
+	// GO: &Runtime{...} creates a struct literal and returns a POINTER to it.
 	return &Runtime{
 		systemConfig:     systemConfig,
 		opts:             opts,
@@ -117,6 +121,7 @@ func New(systemConfig *config.SystemConfig, log *zap.Logger, opts Options) *Runt
 		manager:          NewModeManager(systemConfig, log),
 		ioProvider:       providers.IO(),
 		tracer:           tracer.TracerProvider(),
+		// GO: make allocates the channel; capacity 1 means one value may wait buffered.
 		modeTransitionCh: make(chan string, 1),
 	}
 }
@@ -163,6 +168,7 @@ func (rt *Runtime) Run(ctx context.Context) error {
 	rt.startGlobalBackgrounds(ctx)
 	rt.startTracer(ctx)
 
+	// GO: '<-' receives from a channel. This blocks until context cancellation signals Done().
 	<-ctx.Done()
 
 	rt.stopOrchestrators()
@@ -175,6 +181,7 @@ func (rt *Runtime) Run(ctx context.Context) error {
 // initializeMode is dependency assembly. JSON5 has already selected implementations;
 // here OM1 constructs the actual Fuser, LLM/action orchestrators, sensors, memory, etc.
 func (rt *Runtime) initializeMode(modeName string) error {
+	// GO MAP LOOKUP: two-result form gives value plus ok=false when the key is absent.
 	modeCfg, ok := rt.systemConfig.Modes[modeName]
 	if !ok {
 		return fmt.Errorf("mode %q not found in config", modeName)
@@ -192,6 +199,7 @@ func (rt *Runtime) initializeMode(modeName string) error {
 
 	rt.manager.ResetUserContext()
 
+	// GO: var initializes this interface to its zero value, nil, until an implementation is assigned.
 	var knowledgeBase fuser.KnowledgeBase
 	if runtimeConfig.KnowledgeBase != nil {
 		kb, err := knowledgebase.NewKnowledgeBase(runtimeConfig.KnowledgeBase)
@@ -214,6 +222,7 @@ func (rt *Runtime) initializeMode(modeName string) error {
 		mcpOrchestrator = mcp.NewOrchestrator(modeConfig.mcpClient, rt.log)
 	}
 
+	// GO: pointer to a struct literal; this block wires the dependencies for one mode.
 	state := &modeState{
 		runtimeConfig: runtimeConfig,
 		promptFuser:   fuser.NewFuser(runtimeConfig, modeConfig.agentActions, knowledgeBase, memoryManager, mcpDescriber, rt.log),
@@ -276,6 +285,7 @@ func (rt *Runtime) startOrchestrators(ctx context.Context) {
 		return
 	}
 
+	// GO CONTEXT: derive a child cancellation scope specifically for the active mode.
 	modeCtx, cancel := context.WithCancel(ctx)
 	current.cancelCtx = cancel
 
@@ -295,9 +305,11 @@ func (rt *Runtime) startOrchestrators(ctx context.Context) {
 		current.backgroundDone = current.bgOrchestrator.Start(modeCtx)
 	}
 
+	// GO: chan struct{} is a signal-only channel; no payload is needed.
 	cortexDone := make(chan struct{})
 	current.cortexDone = cortexDone
 	go func() {
+		// GO: defer guarantees the completion channel closes when this goroutine exits.
 		defer close(cortexDone)
 		rt.runCortexLoop(modeCtx)
 	}()
@@ -343,13 +355,17 @@ func (rt *Runtime) stopOrchestrators() {
 		{"input", current.inputDone},
 	}
 
+	// GO: WaitGroup counts goroutines so shutdown can wait for all of them.
 	var wg sync.WaitGroup
+	// GO: range iterates the slice; '_' deliberately discards the index.
 	for _, p := range pools {
 		if p.ch == nil {
 			continue
 		}
+		// GO: increment the WaitGroup before starting the goroutine; it must later call Done().
 		wg.Add(1)
 		go func(name string, ch <-chan struct{}) {
+			// GO: defer ensures Done() executes on every return path.
 			defer wg.Done()
 			select {
 			case <-ch:
@@ -359,6 +375,7 @@ func (rt *Runtime) stopOrchestrators() {
 		}(p.name, p.ch)
 	}
 
+	// GO: Wait blocks until the WaitGroup counter reaches zero.
 	wg.Wait()
 }
 
@@ -434,6 +451,7 @@ func (rt *Runtime) onModeTransition(ctx context.Context, fromMode, toMode string
 // handleModeTransitions listens for mode transition requests and handles them sequentially to avoid concurrent transitions.
 func (rt *Runtime) handleModeTransitions(ctx context.Context) {
 	for {
+		// GO: select waits on multiple channel operations and runs whichever case becomes ready.
 		select {
 		case <-ctx.Done():
 			return
@@ -470,10 +488,12 @@ func (rt *Runtime) runCortexLoop(ctx context.Context) {
 		return
 	}
 
+	// GO: explicit numeric conversions are required; Go does not silently mix Duration and float64.
 	tickInterval := time.Duration(float64(time.Second) / current.runtimeConfig.Hertz)
 
 	for {
 		timer := time.NewTimer(tickInterval)
+		// GO: select waits on multiple channel operations and runs whichever case becomes ready.
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -557,6 +577,7 @@ func (rt *Runtime) tick(ctx context.Context, current *modeState, tickStart time.
 
 	rt.tracer.Gauge(prompt, traceOutput(response))
 
+	// GO: ':=' infers this as []llm.ToolCall; these are structured typed calls, not parsed prose.
 	toolCalls := response.ToolCalls
 
 	if current.mcpOrchestrator != nil {
@@ -592,6 +613,7 @@ func (rt *Runtime) tick(ctx context.Context, current *modeState, tickStart time.
 // executeActions is a Runtime METHOD (receiver: rt *Runtime). It converts symbolic LLM
 // ToolCalls into registered AgentActions and asks the Action Orchestrator to run them.
 func (rt *Runtime) executeActions(ctx context.Context, current *modeState, toolCalls []llm.ToolCall) {
+	// GO: len(slice) returns its element count; zero means there is nothing to execute.
 	if len(toolCalls) == 0 {
 		return
 	}
@@ -602,6 +624,7 @@ func (rt *Runtime) executeActions(ctx context.Context, current *modeState, toolC
 		return
 	}
 
+	// GO: range over returned results; '_' ignores the numeric index.
 	for _, res := range current.actionOrchestrator.Submit(ctx, calls) {
 		if res.Err != nil {
 			rt.log.Warn("action failed",
@@ -617,6 +640,7 @@ func (rt *Runtime) watchConfig(ctx context.Context) {
 	if rt.systemConfig.Name == "" {
 		return
 	}
+	// GO: Sprintf formats and returns a string; it does not print to the terminal.
 	path := fmt.Sprintf("config/%s.json5", rt.systemConfig.Name)
 	info, err := os.Stat(path)
 	if err != nil {
@@ -627,10 +651,12 @@ func (rt *Runtime) watchConfig(ctx context.Context) {
 	if interval <= 0 {
 		interval = time.Second
 	}
+	// GO: Ticker repeatedly sends time values on ticker.C until Stop().
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
+		// GO: select waits on multiple channel operations and runs whichever case becomes ready.
 		select {
 		case <-ctx.Done():
 			return
