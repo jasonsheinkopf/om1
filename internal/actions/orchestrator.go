@@ -1,5 +1,28 @@
 package actions
 
+// ============================================================================
+// STUDY GUIDE — ACTION ORCHESTRATOR
+//
+// PURPOSE:
+//   Resolve structured Cortex ToolCalls into registered AgentActions, then schedule
+//   their execution through Connectors.
+//
+// IT DOES NOT KNOW HOW TO MOVE A ROBOT.
+// The concrete Connector owns that implementation detail.
+//
+// IMPORTANT FLOW:
+//   []llm.ToolCall
+//      -> runtime.executeActions
+//      -> ParseCalls (symbolic name -> AgentAction)
+//      -> Submit
+//      -> concurrent / sequential / dependency-aware policy
+//      -> Connector.Connect
+//
+// FDE DEBUGGING BOUNDARY:
+//   Correct ToolCall but no effect? Check ParseCalls -> Submit -> Connector ->
+//   middleware/service/HAL rather than immediately blaming the LLM.
+// ============================================================================
+
 import (
 	"context"
 	"fmt"
@@ -39,6 +62,7 @@ type Orchestrator struct {
 }
 
 // NewOrchestrator creates a new Orchestrator with the given AgentActions, execution mode, dependencies, and logger.
+// NewOrchestrator constructs the action scheduler/router around registered actions.
 func NewOrchestrator(
 	agentActions []*AgentAction,
 	mode ExecMode,
@@ -56,6 +80,7 @@ func NewOrchestrator(
 }
 
 // Submit executes the given Calls and returns their Results.
+// Submit applies the configured execution policy; it routes work but does not implement the side effect.
 func (o *Orchestrator) Submit(ctx context.Context, calls []Call) []Result {
 	switch o.mode {
 	case Sequential:
@@ -68,6 +93,7 @@ func (o *Orchestrator) Submit(ctx context.Context, calls []Call) []Result {
 }
 
 // Start runs the Tick loop for all connectors and waits for them to finish when the context is canceled.
+// Start launches recurring connector Tick loops needed by stateful/long-running connectors.
 func (o *Orchestrator) Start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 
@@ -175,6 +201,8 @@ func (o *Orchestrator) runWithDeps(ctx context.Context, calls []Call) []Result {
 }
 
 // ParseCalls converts raw LLM tool calls to Calls with AgentActions looked up.
+// ParseCalls is the symbolic-to-concrete transition: LLM action name/arguments become internal Calls
+// containing the actual registered AgentAction and its Connector.
 func (o *Orchestrator) ParseCalls(rawToolCalls []map[string]any) ([]Call, error) {
 	var calls []Call
 	for _, rawToolCall := range rawToolCalls {
