@@ -1,5 +1,21 @@
 package llm
 
+// ============================================================================
+// STUDY GUIDE — CORTEX LLM ORCHESTRATOR
+//
+// PURPOSE:
+//   Wrap the selected LLM implementation and coordinate calls to it. Depending
+//   on configuration, this layer also manages conversation history.
+//
+// IMPORTANT:
+//   llm.NewOrchestrator(...) constructs this wrapper. It is not itself "the AI
+//   model"; it coordinates the concrete LLM plugin selected by configuration.
+//
+// CONCURRENCY LESSON:
+//   Shared history is protected with a mutex, but slow model/network calls should
+//   happen outside the lock: lock -> snapshot -> unlock -> call -> lock -> update.
+// ============================================================================
+
 import (
 	"context"
 	"encoding/json"
@@ -16,6 +32,7 @@ type Orchestrator struct {
 }
 
 // NewOrchestrator creates an Orchestrator with the given LLM, config, and schemas.
+// NewOrchestrator builds the coordinator around a concrete LLM implementation.
 func NewOrchestrator(llm LLM, config map[string]any, schemas []map[string]any) *Orchestrator {
 	historyLen := 0
 	if config != nil {
@@ -42,6 +59,8 @@ func (o *Orchestrator) SetSchemas(schemas []map[string]any) { o.llm.SetSchemas(s
 func (o *Orchestrator) FunctionSchemas() []map[string]any { return o.llm.FunctionSchemas() }
 
 // Call implements the LLM interface. It manages conversation history based on maxLen.
+// Call is the runtime-facing Cortex call. It delegates to the provider while
+// coordinating any configured history/state around that call.
 func (o *Orchestrator) Call(ctx context.Context, prompt string, _ []Message) (*Response, error) {
 	if o.maxLen == 0 {
 		return o.llm.Call(ctx, prompt, nil)
