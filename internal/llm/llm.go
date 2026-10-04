@@ -1,5 +1,19 @@
 package llm
 
+// ============================================================================
+// STUDY GUIDE — LLM CONTRACTS / TYPED CORTEX OUTPUT
+//
+// This file defines the abstraction between OM1 and concrete LLM providers.
+//
+// CRITICAL IDEA:
+//   Cortex does NOT merely emit prose that OM1 guesses commands from.
+//   Response can contain TextContent plus structured []ToolCall.
+//   ToolCall has a Name and structured Arguments.
+//
+// Action schemas tell the model which callable actions exist and what arguments
+// they expect. Concrete Gemini/OpenAI/etc. plugins satisfy the LLM interface.
+// ============================================================================
+
 import (
 	"context"
 )
@@ -9,11 +23,15 @@ type Message struct {
 	Content string
 }
 
+// ToolCall is the symbolic instruction returned by the model before OM1 resolves
+// it to a concrete AgentAction/Connector.
 type ToolCall struct {
 	Name      string
 	Arguments map[string]any
 }
 
+// Response is Cortex's typed result: natural-language content, structured tool calls,
+// and usage metadata can travel together.
 type Response struct {
 	TextContent string
 	ToolCalls   []ToolCall
@@ -25,6 +43,8 @@ type Usage struct {
 	CompletionTokens int
 }
 
+// LLM is the provider contract. Runtime code depends on this interface rather than
+// hard-coding Gemini/OpenAI/etc., which keeps the architecture pluggable.
 type LLM interface {
 	// Call sends a prompt and conversation history to the model.
 	Call(ctx context.Context, prompt string, history []Message) (*Response, error)
