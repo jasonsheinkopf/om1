@@ -1,5 +1,30 @@
 package runtime
 
+// ============================================================================
+// STUDY GUIDE — OM1 RUNTIME / CORE CONTROL FLOW
+//
+// THIS IS THE MOST IMPORTANT END-TO-END FILE.
+//
+// Read it in this order:
+//   1) Runtime + modeState structs  -> what long-lived state exists?
+//   2) New                         -> construct Runtime
+//   3) Run                         -> own startup/shutdown lifecycle
+//   4) initializeMode              -> construct/wire mode dependencies
+//   5) startOrchestrators          -> start concurrent machinery
+//   6) runCortexLoop               -> decide WHEN to think
+//   7) tick                        -> perform ONE think/act cycle
+//   8) executeActions              -> route structured tool calls to actions
+//
+// CORE DATA FLOW:
+//   input plugins -> latest sensor buffers -> Fuser.Fuse -> prompt
+//   -> Cortex LLM Call -> []ToolCall -> executeActions
+//   -> Action Orchestrator -> Connector -> real side effect
+//
+// IMPORTANT DISTINCTION:
+//   initializeMode BUILDS components. startOrchestrators STARTS their loops.
+//   The Fuser is context fusion for the LLM, not low-level robotics sensor fusion.
+// ============================================================================
+
 import (
 	"context"
 	"fmt"
@@ -30,6 +55,8 @@ type Options struct {
 	CheckInterval float64
 }
 
+// modeState bundles everything owned by ONE active mode. These are pointers because
+// orchestrators/Fuser/LLM are long-lived stateful components with lifecycle/resources.
 type modeState struct {
 	runtimeConfig      *config.RuntimeConfig
 	promptFuser        *fuser.Fuser
@@ -55,6 +82,8 @@ type globalBackgroundState struct {
 	cancel       context.CancelFunc
 }
 
+// Runtime is the top-level service object. It owns configuration, the current mode,
+// synchronization, transitions, tracing, and startup/shutdown of the agent machinery.
 type Runtime struct {
 	systemConfig *config.SystemConfig
 	opts         Options
@@ -74,6 +103,7 @@ type Runtime struct {
 	globalBg globalBackgroundState
 }
 
+// New CONSTRUCTS Runtime; it does not start the agent. This is constructor-style Go.
 func New(systemConfig *config.SystemConfig, log *zap.Logger, opts Options) *Runtime {
 	zenohsession.SetDefaultOptions(zenohsession.Options{
 		UseSim: systemConfig.UseSim,
@@ -91,6 +121,8 @@ func New(systemConfig *config.SystemConfig, log *zap.Logger, opts Options) *Runt
 	}
 }
 
+// Run owns the Runtime lifecycle: initialize -> start -> wait -> stop.
+// Notice the pointer receiver (*Runtime): this is a method operating on one Runtime instance.
 func (rt *Runtime) Run(ctx context.Context) error {
 	if rt.opts.HotReload {
 		go rt.watchConfig(ctx)
@@ -140,6 +172,8 @@ func (rt *Runtime) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// initializeMode is dependency assembly. JSON5 has already selected implementations;
+// here OM1 constructs the actual Fuser, LLM/action orchestrators, sensors, memory, etc.
 func (rt *Runtime) initializeMode(modeName string) error {
 	modeCfg, ok := rt.systemConfig.Modes[modeName]
 	if !ok {
@@ -226,6 +260,9 @@ func (rt *Runtime) startTracer(ctx context.Context) {
 }
 
 // startOrchestrators starts the orchestrators for the current mode in separate goroutines.
+// startOrchestrators turns constructed components into running concurrent machinery.
+// The Input Orchestrator keeps sensor buffers fresh; Action/background loops run;
+// runCortexLoop is launched as a goroutine.
 func (rt *Runtime) startOrchestrators(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
@@ -414,6 +451,9 @@ func (rt *Runtime) handleModeTransitions(ctx context.Context) {
 
 // runCortexLoop runs the cortex loop for the current mode, ticking at the configured hertz
 // and also allowing immediate ticks when signaled by the InputOrchestrator.
+// runCortexLoop is the agent heartbeat/event loop. A Cortex cycle can be triggered
+// by the configured period, an input TickNow signal, or a mode-context update.
+// Not every raw sensor message necessarily causes an LLM call.
 func (rt *Runtime) runCortexLoop(ctx context.Context) {
 	modeName := rt.manager.CurrentMode()
 
@@ -470,6 +510,9 @@ func (rt *Runtime) scheduleTransition(toMode string) bool {
 
 // tick executes a single cortex cycle: checks for mode transitions, fuses a
 // prompt, calls the LLM, executes tool calls and records telemetry.
+// tick is ONE complete reasoning cycle:
+// snapshot buffers -> check transition -> fuse prompt -> call Cortex -> resolve optional
+// MCP calls -> execute remaining agent actions -> record memory/telemetry.
 func (rt *Runtime) tick(ctx context.Context, current *modeState, tickStart time.Time) {
 	if ctx.Err() != nil {
 		return
@@ -485,12 +528,14 @@ func (rt *Runtime) tick(ctx context.Context, current *modeState, tickStart time.
 	}
 
 	rt.ioProvider.IncrementTick()
+	// Snapshot the latest formatted observations. This is current state, not a raw-history queue.
 	sensorBuffers := current.inputOrchestrator.Buffers()
 
 	if rt.scheduleTransition(rt.manager.CheckTransitions(ctx, sensorBuffers)) {
 		return
 	}
 
+	// Fuser turns observations + persona + memory/KB + available capabilities into LLM context.
 	prompt, err := current.promptFuser.Fuse(ctx, sensorBuffers)
 	if err != nil {
 		rt.log.Warn("fuse failed", zap.Error(err))
@@ -503,6 +548,7 @@ func (rt *Runtime) tick(ctx context.Context, current *modeState, tickStart time.
 
 	rt.log.Info("cortex tick", zap.String("mode", rt.manager.CurrentMode()), zap.String("prompt", prompt))
 
+	// Cortex returns a typed response that may contain text AND structured ToolCalls.
 	response, err := current.cortexLLM.Call(ctx, prompt, nil)
 	if err != nil {
 		rt.log.Warn("llm call failed", zap.Error(err))
@@ -543,6 +589,8 @@ func (rt *Runtime) tick(ctx context.Context, current *modeState, tickStart time.
 }
 
 // executeActions executes the given tool calls using the current mode's action orchestrator, logging any errors.
+// executeActions is a Runtime METHOD (receiver: rt *Runtime). It converts symbolic LLM
+// ToolCalls into registered AgentActions and asks the Action Orchestrator to run them.
 func (rt *Runtime) executeActions(ctx context.Context, current *modeState, toolCalls []llm.ToolCall) {
 	if len(toolCalls) == 0 {
 		return
