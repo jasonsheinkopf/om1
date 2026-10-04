@@ -1,12 +1,28 @@
 package zenoh
 
+// ============================================================================
+// STUDY GUIDE — ZENOH ABSTRACTION
+//
+// OM1 hides middleware details behind the Session, Publisher, and Subscriber
+// interfaces. Higher-level code can publish/subscribe without depending directly
+// on every concrete Zenoh implementation detail.
+//
+// IMPORTANT INTERVIEW NUANCE:
+//   Do not say "Zenoh is always OM1's ROS bridge." OM1 uses pluggable connectors.
+//   Some robot paths use Zenoh/ROS-facing topics; other connectors can use HTTP,
+//   TTS services, SDKs, WebSockets, or other interfaces.
+//
+// GO2 EXAMPLE:
+//   move connector -> Publisher.Put(serialized Twist bytes) -> cmd_vel
+// ============================================================================
+
 import (
 	"sync"
 
 	"github.com/openmind/om1/internal/cloudsession"
 )
 
-type Session interface {
+// Session is the middleware-facing contract for declaring pub/sub resources and one-shot puts.\ntype Session interface {
 	// DeclarePublisher declares a publisher for the given key and returns it.
 	DeclarePublisher(key string) (Publisher, error)
 
@@ -20,7 +36,7 @@ type Session interface {
 	Close()
 }
 
-type Publisher interface {
+// Publisher owns a declared key expression and accepts serialized []byte payloads.\ntype Publisher interface {
 	// Put publishes data on the publisher's key expression.
 	Put(data []byte) error
 
@@ -71,7 +87,7 @@ func defaultOptions() Options {
 	return defaultOpts
 }
 
-// Open creates a new Session with the given endpoint or the default if empty.
+// Open creates a Session using process defaults. Callers depend on the Session interface,\n// which keeps concrete middleware details behind this boundary.
 func Open(endpoint ...string) (Session, error) {
 	opts := defaultOptions()
 	opts.LocalNetwork = true
