@@ -50,7 +50,7 @@ import (
 	zenohsession "github.com/openmind/om1/internal/zenoh"
 )
 
-type Options struct {
+// GO: A struct is a named collection of typed fields (similar to a small Python dataclass).\n// Capitalized fields are exported, so code in other packages may access them.\ntype Options struct {
 	HotReload     bool
 	CheckInterval float64
 }
