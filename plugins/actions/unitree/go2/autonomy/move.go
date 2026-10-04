@@ -1,5 +1,34 @@
 package autonomy
 
+// ============================================================================
+// STUDY GUIDE — REAL UNITREE GO2 MOVEMENT CONNECTOR
+//
+// This is the concrete end of the architecture:
+//
+//   Cortex ToolCall
+//      -> Action Orchestrator
+//      -> moveConnector.Connect
+//      -> validate safety/runtime state
+//      -> queue moveCommand
+//      -> moveConnector.Tick progresses it over time
+//      -> compute velocity
+//      -> serialize Twist
+//      -> Zenoh Publisher.Put("cmd_vel")
+//      -> downstream robot/ROS-facing stack
+//
+// KEY DESIGN LESSON:
+//   The LLM chooses HIGH-LEVEL INTENT ("move forwards", "turn left").
+//   Deterministic connector code owns operational constraints, odometry,
+//   safe-path checks, timeouts, progress detection, serialization, and stopping.
+//
+// Connect vs Tick:
+//   Connect = accept/interpret a new high-level decision.
+//   Tick    = progress an ongoing movement plan.
+//
+// This is a particularly valuable FDE file because product logic meets middleware,
+// robot state, safety, timing, concurrency, and physical behavior here.
+// ============================================================================
+
 import (
 	"context"
 	"fmt"
@@ -61,6 +90,8 @@ type MoveInput struct {
 	Action MoveAction `json:"action" description:"The movement to perform"`
 }
 
+// init runs when this plugin package is loaded. Registration makes the connector discoverable
+// by name so JSON5/config-driven assembly can instantiate it later.
 func init() {
 	actions.RegisterInterface(
 		"unitree_go2_autonomy",
@@ -125,6 +156,8 @@ type moveConnector struct {
 }
 
 // NewMoveConnector builds the autonomy connector from its decoded config.
+// NewMoveConnector acquires the real integration dependencies: robot-state providers,
+// Zenoh session, publishers/subscribers, and optional guard behavior.
 func NewMoveConnector(cfg map[string]any) (actions.Connector, error) {
 	log := logger.Get().Named("unitree_go2_autonomy/move")
 
@@ -171,6 +204,8 @@ func NewMoveConnector(cfg map[string]any) (actions.Connector, error) {
 	return c, nil
 }
 
+// Connect handles ONE new high-level Cortex action. It validates gates and queues
+// movement; it does not continuously drive motors itself.
 func (c *moveConnector) Connect(_ context.Context, input actions.Input) (actions.Output, error) {
 	args, ok := input.(map[string]any)
 	if !ok {
@@ -275,6 +310,8 @@ func (c *moveConnector) queue(cmd *moveCommand) {
 }
 
 // Tick advances the active movement command one step per runtime cycle.
+// Tick advances pending movement over time using current odometry/safety state.
+// This is why the Action Orchestrator has recurring connector tick loops.
 func (c *moveConnector) Tick(ctx context.Context) {
 	select {
 	case <-ctx.Done():
@@ -407,6 +444,8 @@ func (c *moveConnector) executeTurn(gap float64) bool {
 }
 
 // moveRobot publishes a Twist velocity command on /cmd_vel, but only while the robot is standing.
+// moveRobot is near the middleware boundary: semantic movement becomes serialized
+// velocity bytes published through Zenoh. The LLM never handles this representation.
 func (c *moveConnector) moveRobot(pos go2.OdomPosition, vx, vy, vturn float64) {
 	if pos.BodyAttitude != go2.RobotStateStanding {
 		return
