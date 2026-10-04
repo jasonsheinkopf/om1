@@ -1,5 +1,31 @@
 package inputs
 
+// ============================================================================
+// STUDY GUIDE — INPUT ORCHESTRATOR
+//
+// PURPOSE:
+//   Run configured Sensor implementations concurrently and expose their latest
+//   formatted observations to the Runtime.
+//
+// MENTAL MODEL:
+//   microphone / camera / localization / robot state / other input
+//       -> concrete Sensor plugin
+//       -> processing (RawToText / plugin-specific work)
+//       -> latest formatted buffer
+//       -> Orchestrator.Buffers()
+//       -> Runtime.tick -> Fuser
+//
+// KEY CORRECTION:
+//   This layer does NOT mean "all ROS2 data automatically enters OM1."
+//   Only configured input plugins participate. Sensor-specific processing occurs
+//   before the Fuser; the Fuser should not receive raw LiDAR packets.
+//
+// GO TO NOTICE:
+//   goroutines = concurrent sensor listeners
+//   channels = readings, completion, and optional TickNow wake-up
+//   context = cancellation/lifecycle propagation
+// ============================================================================
+
 import (
 	"context"
 	"sync"
@@ -15,6 +41,7 @@ type Orchestrator struct {
 }
 
 // NewOrchestrator creates a new Orchestrator with the given sensors and logger.
+// NewOrchestrator constructs the input manager around already-created Sensor implementations.
 func NewOrchestrator(sensors []Sensor, log *zap.Logger) *Orchestrator {
 	return &Orchestrator{
 		sensors: sensors,
@@ -24,11 +51,13 @@ func NewOrchestrator(sensors []Sensor, log *zap.Logger) *Orchestrator {
 }
 
 // TickNow returns a channel that is sent a signal whenever any sensor receives new input.
+// TickNow exposes the event channel that can wake Cortex immediately instead of waiting for the timer.
 func (o *Orchestrator) TickNow() <-chan struct{} {
 	return o.tickNow
 }
 
 // Start launches one goroutine per sensor and returns a channel that is closed when all goroutines have finished.
+// Start launches the long-lived input work. Construction and execution are separate phases.
 func (o *Orchestrator) Start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 	var wg sync.WaitGroup
@@ -83,6 +112,7 @@ func (o *Orchestrator) runSensor(ctx context.Context, sensorIndex int, sensor Se
 }
 
 // Buffers returns a snapshot of the latest buffer from each sensor, formatted as text.
+// Buffers returns the latest formatted observation from each sensor for the next Cortex tick.
 func (o *Orchestrator) Buffers() []string {
 	snapshot := make([]string, len(o.sensors))
 
